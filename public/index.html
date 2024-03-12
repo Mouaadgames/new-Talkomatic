@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="global.css">
+  <title>new talkomatic</title>
+  <script>
+    if (window.location.search.indexOf("=") !== -1) {
+      let msg = window.location.search.substring(window.location.search.indexOf("=")+1);
+      msg = decodeURIComponent(msg)
+      alert(msg);
+    }
+  </script>
+
+</head>
+
+<body>
+  <h1>New Talkomatic</h1>
+  <section class="abs">
+    <h2>How do you want to be known?</h2>
+    <form method="post" action="/register">
+      <input name="name" type="text" required placeholder="your name">
+      <button>sign in</button>
+    </form>
+  </section>
+</body>
+
+</html>
