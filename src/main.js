@@ -102,9 +102,9 @@ async function main() {
       return window.location.replace("/")
     if (event === "no_room")
       return window.location.replace("/lobby.html")
-      if (event === "full_room") {
-        return window.location.replace("/lobby.html?a=Full_room")
-      }
+    if (event === "full_room") {
+      return window.location.replace("/lobby.html?a=Full_room")
+    }
   })
 
   socket.on("updateMsgs", (data) => {
@@ -124,11 +124,11 @@ async function main() {
     console.log("Message from server - ", data);
 
     // To Do : we might consider adding sequence number to the message the check if this is the correct message change that we want to apply some thing like how ping command dose it  
-    users[data.userCol].value = data.msg
-    usersData[data.userCol].inputField = data.msg
-    // applyChangeToTheText( // use this <--
-    //   user.change,
-    //   usersData[user.index])
+    usersData[data.userCol].inputField = applyInstructionsToTheText(
+      data.msg,
+      usersData[data.userCol].inputField)
+
+    updateUserField()
   })
 
 
@@ -140,9 +140,9 @@ async function main() {
      *  name:""
      * }
     */
-    userNames[event.index].innerText = event.name
     usersData[event.index].name = event.name
     console.log("newUser : ", event)
+    updateUserField()
   });
 
   socket.on("userLeft", (event) => {
@@ -154,66 +154,118 @@ async function main() {
     usersData = usersData.filter((_, i) => i !== event.index) // remove the user that left
     usersData.push({ name: "<empty>", inputField: "", isYou: false })
     console.log("usersData : ", usersData);
-    usersData.forEach((u, i) => {
-      users[i].value = u.inputField
-      userNames[i].innerText = u.name
-      users[i].disabled = !u.isYou
-      users[i].removeEventListener("input", onTextChange)
-      if (u.isYou) {
-        users[i].addEventListener("input", onTextChange)
-      }
-    })
+    updateUserField()
     console.log("userLeft : ", event)
   });
 }
 
-// let isRecentlySent = false
-// let stale = false
-// let msg = ""
-
-// setInterval(() => {
-//   if (stale) {
-//     socket.send(JSON.stringify({
-//       token,
-//       roomId: window.location.search.substring(4),
-//       message: msg
-//     }));
-//     stale = false
-//   }
-// }, 1000);
-
-let previousText = ""
-let lastSendText = ''
 function onTextChange(e) {
   const currentText = e.target.value
   // use patience diff to check the difference
-  console.log(currentText)
-  usersData.forEach((u, i) => {
-    if (u.isYou) {
-      u.inputField = currentText
+  for (let j = 0; j < usersData.length; j++) {
+    const user = usersData[j];
+    if (user.isYou) {
+      user.inputField = currentText
+      break
+    }
+  }
+  checkIfSendIsAvailable(currentText)
+}
+function applyInstructionsToTheText(instruction, originalText) {
+  let text = originalText
+  let deletedLetters = 0
+  instruction.forEach(c => {
+    if (c[1] === "a") {
+      text = text.slice(0, c[0] - deletedLetters) + c[2] + text.slice(c[0] - deletedLetters)
+    }
+    if (c[1] === "d") {
+
+      text = text.slice(0, c[0] - deletedLetters) + text.slice(c[0] + c[2] - deletedLetters)
+      deletedLetters += c[2]
     }
   })
+  return text
+}
+
+function transformToInstructions(pevText, newText) {
+  const diff = patienceDiff(pevText, newText).lines.map((c, i) => ({ i, ...c }))
+  let inst = []
+  let instructionStackLength = 0 // for the lack of a better name
+  for (let i = 0; i < diff.length; i++) {
+    const charLine = diff[i];
+    // check if the last inst hav an indx one less and the same instruction as the if statment
+    if (charLine.aIndex === -1) {
+      if (inst.length &&
+        inst[inst.length - 1][1] === "a" &&
+        inst[inst.length - 1][0] === charLine.i - 1 - instructionStackLength
+      ) {
+        instructionStackLength++
+        inst[inst.length - 1][2] += charLine.line
+        continue
+      }
+      instructionStackLength = 0
+      inst.push([charLine.i, "a", charLine.line])
+      continue
+    }
+    if (charLine.bIndex === -1) {
+      if (inst.length &&
+        inst[inst.length - 1][1] === "d" &&
+        inst[inst.length - 1][0] === charLine.i - 1 - instructionStackLength
+      ) {
+        instructionStackLength++
+        inst[inst.length - 1][2]++
+        continue
+      }
+      instructionStackLength = 0
+      inst.push([charLine.i, "d", 1])
+    }
+  }
+  // instruction [[<pos>,"<action>","<data>"],[3,"a","v"],[4,"d",3]...]
+  return inst
+}
+
+function updateUserField() {
+  usersData.forEach((u, i) => {
+    users[i].value = u.inputField
+    userNames[i].innerText = u.name
+    users[i].disabled = !u.isYou
+    users[i].removeEventListener("input", onTextChange)
+    if (u.isYou) {
+      users[i].addEventListener("input", onTextChange)
+    }
+  })
+}
+
+let lastSendText = ''
+
+const keyStrokeLimit = 10
+let keyStrokes = 0
+
+const sendThroughRate = 2000 // 2s
+let lastTimeSend = Date.now()
+
+let timeoutRef = null
+function checkIfSendIsAvailable(currentText) {
+  keyStrokes++
+  if (Date.now() - lastTimeSend < sendThroughRate && keyStrokes < keyStrokeLimit) {
+    timeoutRef && clearTimeout(timeoutRef)
+    timeoutRef = setTimeout(() => {
+      checkIfSendIsAvailable(currentText)
+    }, sendThroughRate - (Date.now() - lastTimeSend))
+    return
+  }
+
+  lastTimeSend = Date.now()
+  keyStrokes = 0
+  if (currentText === lastSendText) {
+    return
+  }
+
   socket.emit("updateMsg",
-    currentText
+    transformToInstructions(lastSendText, currentText)
   )
-  //   if (isRecentlySent) {
-  //     stale = true
-  //     return 
-  //   }
-  //   stale = false
-  //   isRecentlySent = true
-  //   setTimeout(() => {
-  //     isRecentlySent = false
-  //   }, 1000)
-  //   socket.send(JSON.stringify({
-  //     token,
-  //     roomId: window.location.search.substring(4),
-  //     message: msg
-  //   }));
-
+  lastSendText = currentText
 }
-function applyChangeToTheText(change, original) {
 
-}
 
 main()

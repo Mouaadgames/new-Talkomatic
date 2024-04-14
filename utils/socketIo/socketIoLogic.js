@@ -1,6 +1,7 @@
 
 const { isTokenValid, isRoomIdValid } = require("../validation")
 const Store = require("../../Models/Store")
+const applyInstructionsToTheText = require("./textManipulation")
 function socketIoLogic(io) {
 
   io.on('connection', function (ws, request) {
@@ -52,7 +53,7 @@ function socketIoLogic(io) {
         msg
       })
       //update the input filed in the user obj using the send instructions
-      currentUser.inputField = msg
+      currentUser.inputField = applyInstructionsToTheText(msg, currentUser.inputField)
     });
 
     ws.on('disconnect', function () {
