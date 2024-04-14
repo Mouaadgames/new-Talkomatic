@@ -47,12 +47,12 @@ async function setRoomsToThePage() {
     room_header.append(title, enter)
     roomDiv.append(room_header)
     const ol = document.createElement("ol")
-    room.users.forEach((user, i) => {
+    room.users.forEach((username, i) => {
       const li = document.createElement("li")
       const span = document.createElement("span")
       span.classList.add("c")
       span.innerText = i + 1
-      li.append(span, user.name)
+      li.append(span, username)
       ol.append(li)
     })
     roomDiv.append(ol)
